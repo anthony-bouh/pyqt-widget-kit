@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyqt-widget-kit"
+version = "0.1.0"
+description = "Reusable PyQt6 widgets and settings UI helpers."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6>=6.6",
+]
+authors = [
+    { name = "anthony-bouh" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1",
+    "pytest>=8",
+]
+
+[project.urls]
+Homepage = "https://github.com/anthony-bouh/pyqt-widget-kit"
+Source = "https://github.com/anthony-bouh/pyqt-widget-kit"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pyqt_widget_kit = ["py.typed", "ico/*", "styles/*.qss"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

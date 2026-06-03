@@ -1,0 +1,38 @@
+
+RegexLineEdit {
+    border-radius:      4px;
+    border:             1px solid palette(mid);
+    padding:            0px;
+    margin:             0px;
+}
+
+RegexLineEdit QLineEdit {
+    padding:            0px;
+    margin:             0px;
+}
+
+RegexLineEdit[focused="true"] {
+    border-color:       palette(highlight);
+}
+
+RegexLineEdit QLineEdit:hover, RegexLineEdit QLineEdit:focus, RegexLineEdit[focused="true"] QLineEdit {
+    background-color:   transparent;
+    border:             none;
+}
+
+StringFilterLineEdit {
+    border-radius:      4px;
+    border:             1px solid palette(mid);
+    padding:            0px;
+    margin:             0px;
+}
+
+StringFilterLineEdit QLineEdit {
+    padding:            0px;
+    margin:             0px;
+}
+
+StringFilterLineEdit QLineEdit:hover, StringFilterLineEdit QLineEdit:focus {
+    background-color:   transparent;
+    border:             none;
+}
