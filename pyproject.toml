@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Reusable PyQt6 widgets and settings UI helpers."
 readme = "README.md"
 requires-python = ">=3.10"
+license = { file = "LICENSE" }
 dependencies = [
     "PyQt6>=6.6",
 ]
@@ -18,6 +19,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: X11 Applications :: Qt",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",

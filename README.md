@@ -97,7 +97,3 @@ tests/                    Automated tests
 examples/                 Small runnable examples
 docs/                     Longer usage documentation
 ```
-
-## Before Publishing
-
-Add a license file that matches how you want other developers to use the package.
