@@ -17,6 +17,18 @@ From GitHub after publishing the repository:
 python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git"
 ```
 
+Check the version currently installed in the active Python environment:
+
+```bash
+python -m pip show pyqt-widget-kit
+```
+
+Check the latest version available for download from PyPI:
+
+```bash
+python -m pip index versions pyqt-widget-kit
+```
+
 ## Quick Use
 
 ```python

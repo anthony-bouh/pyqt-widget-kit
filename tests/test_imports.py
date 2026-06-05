@@ -8,6 +8,7 @@ def test_public_widgets_import() -> None:
     assert pyqt_widget_kit.RegexLineEdit.__name__ == "RegexLineEdit"
     assert pyqt_widget_kit.IconButton.__name__ == "IconButton"
     assert pyqt_widget_kit.RightLeftButton.__name__ == "RightLeftButton"
+    assert pyqt_widget_kit.BaseFigureWidget.__name__ == "BaseFigureWidget"
     assert not any(name.startswith("My") for name in pyqt_widget_kit.__all__)
 
 

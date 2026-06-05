@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 dependencies = [
+    "numpy>=1.26",
     "PyQt6>=6.6",
+    "pyqtgraph>=0.13",
 ]
 authors = [
     { name = "anthony-bouh" },
