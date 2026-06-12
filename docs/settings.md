@@ -299,7 +299,7 @@ class PlotSettingsWindow(SettingsWindow):
         state = fig.current_settings()
 
         self.mode = self.add_choice(
-            key="plot.mode",
+            key="mode",
             title="Plot Type",
             options=["lines", "markers", "lines+markers"],
             value=state["mode"],
@@ -307,7 +307,7 @@ class PlotSettingsWindow(SettingsWindow):
         ).widget
 
         self.line_width = self.add_int(
-            key="plot.line_width",
+            key="line_width",
             title="Line Width",
             value=state["line_width"],
             minimum=1,
@@ -318,7 +318,7 @@ class PlotSettingsWindow(SettingsWindow):
         self.add_button("Apply", self.apply)
 
     def apply(self) -> None:
-        self.fig.apply_setting(self.values())
+        self.fig.apply_settings(self.values())
 ```
 
 If users need shared defaults or presets, add explicit actions such as

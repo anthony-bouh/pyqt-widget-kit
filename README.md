@@ -1,5 +1,8 @@
 # PyQt Widget Kit
 
+[![Latest release](https://img.shields.io/github/v/release/anthony-bouh/pyqt-widget-kit?sort=semver)](https://github.com/anthony-bouh/pyqt-widget-kit/releases/latest)
+[![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-blue)](CHANGELOG.md)
+
 Reusable PyQt6 widgets and settings-window helpers packaged for installation
 from GitHub or as a local editable dependency.
 
@@ -15,6 +18,12 @@ From GitHub after publishing the repository:
 
 ```bash
 python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git"
+```
+
+From a specific GitHub release tag:
+
+```bash
+python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git@v0.1.0"
 ```
 
 Check the version currently installed in the active Python environment:
@@ -44,6 +53,23 @@ selector.selectionChanged.connect(print)
 selector.show()
 
 app.exec()
+```
+
+Interactive scatter figures are available when points need metadata, click
+signals, or rectangular selection:
+
+```python
+from pyqt_widget_kit import ScatterFigureWidget
+
+figure = ScatterFigureWidget()
+figure.add_points(
+    [1.0, 2.0],
+    [3.0, 4.0],
+    series_name="Batch A",
+    metadata=[{"filepath": "a.h5"}, {"filepath": "b.h5"}],
+)
+figure.pointClicked.connect(print)
+figure.show()
 ```
 
 ## Stylesheets
@@ -99,6 +125,28 @@ window = SettingsWindow(
     minimum_size=(600, 400),
 )
 ```
+
+## Releases and Updates
+
+New public versions are announced on
+[GitHub Releases](https://github.com/anthony-bouh/pyqt-widget-kit/releases).
+To receive notifications, open the repository on GitHub and choose
+`Watch` -> `Custom` -> `Releases`.
+
+The project follows [Semantic Versioning](https://semver.org/) for release
+numbers:
+
+- `MAJOR` changes can break existing user code.
+- `MINOR` changes add backward-compatible features.
+- `PATCH` changes fix bugs without changing the public API.
+
+While the package is still below `1.0.0`, public APIs may change as the widget
+set settles. Breaking changes are called out in the release notes and in the
+[changelog](CHANGELOG.md).
+
+GitHub release notes are generated from merged pull requests. Use labels such
+as `breaking-change`, `enhancement`, `bug`, `documentation`, and
+`dependencies` to place changes in the right release-note section.
 
 ## Project Layout
 

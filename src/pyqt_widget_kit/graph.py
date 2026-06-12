@@ -2,11 +2,64 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence, Tuple
+from collections.abc import Mapping
+from typing import (
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    Sequence,
+    Tuple,
+    TypedDict,
+    cast,
+)
 
 import numpy as np
 from PyQt6 import QtCore, QtGui, QtWidgets
 import pyqtgraph as pg
+
+from .buttons import IconButton
+
+
+class HDF5DatasetLike(Protocol):
+    """Minimal h5py.Dataset-compatible surface accepted by add_dataset."""
+
+    dtype: object
+    ndim: int
+    shape: tuple[int, ...]
+
+    def __getitem__(self, key: object) -> object:
+        ...
+
+
+DatasetInput = np.ndarray | Sequence[float] | HDF5DatasetLike
+ColorInput = str | QtGui.QColor | tuple[int, ...]
+CurveReference = str | pg.PlotDataItem
+FigureMode = Literal["lines", "markers", "lines+markers"]
+_UNSET = object()
+
+
+class FigureSettings(TypedDict, total=False):
+    """Visual settings accepted by BaseFigureWidget.apply_settings.
+
+    All keys are optional so callers can apply partial updates.
+    """
+
+    mode: FigureMode
+    line_width: int
+    marker_size: int
+    plot_title: str
+    x_axis_title: str
+    y_axis_title: str
+    show_legend: bool
+    show_grid_x: bool
+    show_grid_y: bool
+    grid_alpha: float
+    log_x: bool
+    log_y: bool
+
+
+_ALLOWED_MODES: tuple[FigureMode, ...] = ("lines", "markers", "lines+markers")
 
 
 class BaseFigureWidget(QtWidgets.QWidget):
@@ -16,8 +69,7 @@ class BaseFigureWidget(QtWidgets.QWidget):
     This class centralizes reusable plot configuration, styling, and helper
     methods so concrete widgets (time-series, scatter, etc.) can share the
     same behaviors. Subclasses can either pass an existing PlotWidget or let
-    the base class create one, and can opt out of the auto layout if they need
-    a custom container hierarchy.
+    the base class create one.
     """
 
     DEFAULT_PALETTE = [
@@ -33,10 +85,9 @@ class BaseFigureWidget(QtWidgets.QWidget):
         "#17becf",
     ]
 
-    def __init__(self, parent: Optional[QtWidgets.QWidget] = None, *, plot: Optional[pg.PlotWidget] = None,
-        auto_layout: bool = True,
-        with_legend: bool = True,
-    ) -> None:
+    cursorPositionChanged = QtCore.pyqtSignal(float, float)
+
+    def __init__(self, parent: Optional[QtWidgets.QWidget] = None, *, plot: Optional[pg.PlotWidget] = None, with_legend: bool = True) -> None:
         super().__init__(parent)
 
         self.plot: pg.PlotWidget = plot or pg.PlotWidget()
@@ -45,55 +96,78 @@ class BaseFigureWidget(QtWidgets.QWidget):
         self.color_palette = list(self.DEFAULT_PALETTE)
         self._curves: List[pg.PlotDataItem] = []
 
-        self._grid_alpha = 0.2
-        self._mode = "lines"
+        self._grid_alpha = 0.25
+        self._mode: FigureMode = "lines"
         self._line_width = 1
         self._marker_size = 6
         self._show_legend = bool(with_legend)
         self._show_grid_x = True
         self._show_grid_y = True
+        self._log_x = False
+        self._log_y = False
+        self._crosshair_enabled = False
+        self._crosshair_label_visible = True
+        self._crosshair_vline: Optional[pg.InfiniteLine] = None
+        self._crosshair_hline: Optional[pg.InfiniteLine] = None
+        self._crosshair_label: Optional[pg.TextItem] = None
+        self._hover_toolbar_watched: list[QtCore.QObject] = []
 
-        if auto_layout:
-            layout = QtWidgets.QVBoxLayout(self)
-            layout.setContentsMargins(0, 0, 0, 0)
-            layout.addWidget(self.plot)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.plot)
 
-        self._setup_plot_frame()
+        self.hover_toolbar = QtWidgets.QWidget(self)
+        self.toolbar_buttons: dict[str, IconButton] = {}
+        self._setup_hover_toolbar()
+
+        self.plot.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.plot.setStyleSheet("border: none; background: transparent;")
+        self.plot.setBackground(None)
+        self.plot.showAxis("top", True)
+        self.plot.showAxis("right", True)
+        self._apply_grid()
+        self.plot.getAxis("top").setStyle(showValues=False)
+        self.plot.getAxis("right").setStyle(showValues=False)
+
+        view_box = self.plot.getViewBox()
+        if view_box:
+            view_box.setBorder(None)
+            view_box.setBackgroundColor(None)
+
+        if self.legend:
+            self.legend.layout.setColumnMinimumWidth(0, 10)
+            self.legend.layout.setContentsMargins(6, 6, 6, 6)
+            self.set_legend_position("top-right")
+            self.legend.setVisible(self._show_legend)
+
+        self._install_hover_toolbar_filter(self)
+        self._install_hover_toolbar_filter(self.plot)
+        self._position_hover_toolbar()
 
     # region Properties
     @property
-    def mode(self) -> str:
+    def mode(self) -> FigureMode:
         return self._mode
 
     @mode.setter
-    def mode(self, value: str) -> None:
-        allowed = ("lines", "markers", "lines+markers")
-        if value in allowed:
-            self._mode = value
-        else:
-            raise ValueError(f"Invalid mode '{value}'. Allowed: {allowed}")
+    def mode(self, value: object) -> None:
+        self._mode = self._coerce_mode(value)
 
     @property
     def line_width(self) -> int:
         return self._line_width
 
     @line_width.setter
-    def line_width(self, value: int) -> None:
-        try:
-            self._line_width = max(1, int(value))
-        except (TypeError, ValueError):
-            self._line_width = 1
+    def line_width(self, value: object) -> None:
+        self._line_width = self._coerce_positive_int(value, "line_width")
 
     @property
     def marker_size(self) -> int:
         return self._marker_size
 
     @marker_size.setter
-    def marker_size(self, value: int) -> None:
-        try:
-            self._marker_size = max(1, int(value))
-        except (TypeError, ValueError):
-            self._marker_size = 6
+    def marker_size(self, value: object) -> None:
+        self._marker_size = self._coerce_positive_int(value, "marker_size")
 
     @property
     def show_legend(self) -> bool:
@@ -102,10 +176,11 @@ class BaseFigureWidget(QtWidgets.QWidget):
         return self.legend.isVisible()
 
     @show_legend.setter
-    def show_legend(self, value: bool) -> None:
-        self._show_legend = bool(value)
+    def show_legend(self, value: object) -> None:
+        self._show_legend = self._coerce_bool(value, "show_legend")
         if self.legend is not None:
             self.legend.setVisible(self._show_legend)
+        self._sync_hover_toolbar_buttons()
 
     @property
     def plot_title(self) -> str:
@@ -145,18 +220,41 @@ class BaseFigureWidget(QtWidgets.QWidget):
         return self._show_grid_x
 
     @show_grid_x.setter
-    def show_grid_x(self, value: bool) -> None:
-        self._show_grid_x = bool(value)
-        self.plot.showGrid(x=self._show_grid_x, y=self._show_grid_y, alpha=0.2)
+    def show_grid_x(self, value: object) -> None:
+        self._show_grid_x = self._coerce_bool(value, "show_grid_x")
+        self._apply_grid()
+        self._sync_hover_toolbar_buttons()
 
     @property
     def show_grid_y(self) -> bool:
         return self._show_grid_y
 
     @show_grid_y.setter
-    def show_grid_y(self, value: bool) -> None:
-        self._show_grid_y = bool(value)
-        self.plot.showGrid(x=self._show_grid_x, y=self._show_grid_y, alpha=0.2)
+    def show_grid_y(self, value: object) -> None:
+        self._show_grid_y = self._coerce_bool(value, "show_grid_y")
+        self._apply_grid()
+        self._sync_hover_toolbar_buttons()
+
+    @property
+    def grid_alpha(self) -> float:
+        return self._grid_alpha
+
+    @grid_alpha.setter
+    def grid_alpha(self, value: object) -> None:
+        self._grid_alpha = self._coerce_unit_float(value, "grid_alpha")
+        self._apply_grid()
+
+    @property
+    def log_x(self) -> bool:
+        return self._log_x
+
+    @property
+    def log_y(self) -> bool:
+        return self._log_y
+
+    @property
+    def crosshair_enabled(self) -> bool:
+        return self._crosshair_enabled
 
     @property
     def curves(self) -> List[pg.PlotDataItem]:
@@ -164,25 +262,123 @@ class BaseFigureWidget(QtWidgets.QWidget):
 
     # endregion
 
-    # Setup helpers
-    def _setup_plot_frame(self) -> None:
-        self.plot.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.plot.setStyleSheet("border: none; background: transparent;")
-        self.plot.setBackground(None)
-        self.plot.showAxis("top", True)
-        self.plot.showAxis("right", True)
-        self.plot.showGrid(x=True, y=True, alpha=0.25)
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        if watched in self._hover_toolbar_watched:
+            if event.type() in (QtCore.QEvent.Type.Enter, QtCore.QEvent.Type.HoverEnter):
+                self._show_hover_toolbar()
+            elif event.type() in (QtCore.QEvent.Type.Leave, QtCore.QEvent.Type.HoverLeave):
+                QtCore.QTimer.singleShot(0, self._hide_hover_toolbar_if_needed)
+        return super().eventFilter(watched, event)
 
-        view_box = self.plot.getViewBox()
-        if view_box:
-            view_box.setBorder(None)
-            view_box.setBackgroundColor(None)
+    def resizeEvent(self, event: QtGui.QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._position_hover_toolbar()
 
-        if self.legend:
-            self.legend.layout.setColumnMinimumWidth(0, 10)
-            self.legend.layout.setContentsMargins(6, 6, 6, 6)
-            self.set_legend_position("top-right")
-            self.legend.setVisible(self._show_legend)
+    def _setup_hover_toolbar(self) -> None:
+        self.hover_toolbar.setObjectName("BaseFigureWidgetHoverToolbar")
+        self.hover_toolbar.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.hover_toolbar.setStyleSheet(
+            """
+            QWidget#BaseFigureWidgetHoverToolbar {
+                background-color: rgba(255, 255, 255, 220);
+                border-radius: 4px;
+            }
+            """
+        )
+
+        layout = QtWidgets.QHBoxLayout(self.hover_toolbar)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(3)
+
+        actions = [
+            ("auto_range", "Auto range", 'ico/full-screen.png', self._toolbar_auto_range, False),
+            ("legend", "Toggle legend", 'ico/case.png', self._toolbar_toggle_legend, True),
+            ("grid_x", "Toggle grid X", 'ico/grip-lines-vertical.png', self._toolbar_toggle_grid_x, True),
+            ("grid_y", "Toggle grid Y", 'ico/grip-lines-horizontal.png', self._toolbar_toggle_grid_y, True),
+            ("crosshair", "Toggle crosshair", 'ico/square-crosshair.png', self._toolbar_toggle_crosshair, True),
+            ("add_region", "Add region", 'ico/square-dashed-circle-plus.png', lambda: self.add_vertical_region(0, 1), False),
+            ("clear_regions", "Clear regions", 'ico/square-dashed-circle-minus.png', self.clear_regions, False),
+            ("clear_curves", "Clear curves", 'ico/cross.png', self.clear_trace, False),
+        ]
+        for key, tooltip, icon, callback, checkable in actions:
+            button = IconButton(
+                icon,
+                tooltip,
+                self.hover_toolbar,
+                button_size=24,
+                icon_size=14,
+            )
+            button.setFocusPolicy(QtCore.Qt.FocusPolicy.NoFocus)
+            button.setCheckable(checkable)
+            button.clicked.connect(lambda _checked=False, cb=callback: cb())
+            layout.addWidget(button)
+            self.toolbar_buttons[key] = button
+            self._install_hover_toolbar_filter(button)
+
+        self.toolbar_buttons["legend"].setEnabled(self.legend is not None)
+        self._install_hover_toolbar_filter(self.hover_toolbar)
+        self.hover_toolbar.adjustSize()
+        self.hover_toolbar.hide()
+        self._sync_hover_toolbar_buttons()
+
+    def _install_hover_toolbar_filter(self, widget: QtCore.QObject) -> None:
+        if widget in self._hover_toolbar_watched:
+            return
+        widget.installEventFilter(self)
+        self._hover_toolbar_watched.append(widget)
+
+    def _show_hover_toolbar(self) -> None:
+        self._sync_hover_toolbar_buttons()
+        self._position_hover_toolbar()
+        self.hover_toolbar.show()
+        self.hover_toolbar.raise_()
+
+    def _hide_hover_toolbar_if_needed(self) -> None:
+        if self.rect().contains(self.mapFromGlobal(QtGui.QCursor.pos())):
+            return
+        self.hover_toolbar.hide()
+
+    def _position_hover_toolbar(self) -> None:
+        if not hasattr(self, "hover_toolbar"):
+            return
+        size = self.hover_toolbar.sizeHint()
+        self.hover_toolbar.resize(size)
+        margin = 8
+        x = max(margin, self.width() - size.width() - margin)
+        y = margin
+        self.hover_toolbar.move(x, y)
+
+    def _sync_hover_toolbar_buttons(self) -> None:
+        if not hasattr(self, "toolbar_buttons"):
+            return
+        states = {
+            "legend": self.show_legend,
+            "grid_x": self.show_grid_x,
+            "grid_y": self.show_grid_y,
+            "crosshair": self.crosshair_enabled,
+        }
+        for key, checked in states.items():
+            button = self.toolbar_buttons.get(key)
+            if button is None:
+                continue
+            button.blockSignals(True)
+            button.setChecked(checked)
+            button.blockSignals(False)
+
+    def _toolbar_auto_range(self) -> None:
+        self.auto_range(padding=0.08)
+
+    def _toolbar_toggle_legend(self) -> None:
+        self.set_legend_visibility(not self.show_legend)
+
+    def _toolbar_toggle_grid_x(self) -> None:
+        self.set_grid(x=not self.show_grid_x)
+
+    def _toolbar_toggle_grid_y(self) -> None:
+        self.set_grid(y=not self.show_grid_y)
+
+    def _toolbar_toggle_crosshair(self) -> None:
+        self.enable_crosshair(not self.crosshair_enabled)
 
     # Styling and theme
     def set_theme(self) -> None:
@@ -220,20 +416,98 @@ class BaseFigureWidget(QtWidgets.QWidget):
 
     def set_legend_visibility(self, show: bool) -> None:
         """Convenience wrapper to toggle legend visibility."""
-        self.show_legend = bool(show)
+        self.show_legend = show
 
-    def set_grid(self, x: Optional[bool] = None, y: Optional[bool] = None, alpha: Optional[float] = None) -> None:
+    def set_grid(self, x: Optional[object] = None, y: Optional[object] = None, alpha: Optional[object] = None) -> None:
         """Update grid visibility and alpha in one call."""
         if x is not None:
-            self._show_grid_x = bool(x)
+            self._show_grid_x = self._coerce_bool(x, "show_grid_x")
         if y is not None:
-            self._show_grid_y = bool(y)
+            self._show_grid_y = self._coerce_bool(y, "show_grid_y")
         if alpha is not None:
+            self._grid_alpha = self._coerce_unit_float(alpha, "grid_alpha")
+        self._apply_grid()
+        self._sync_hover_toolbar_buttons()
+
+    def set_axis_visibility(
+        self,
+        *,
+        left: Optional[bool] = None,
+        bottom: Optional[bool] = None,
+        top: Optional[bool] = None,
+        right: Optional[bool] = None,
+    ) -> None:
+        """Show or hide individual plot axes without changing their labels."""
+        for axis_name, visible in {
+            "left": left,
+            "bottom": bottom,
+            "top": top,
+            "right": right,
+        }.items():
+            if visible is not None:
+                self.plot.showAxis(axis_name, bool(visible))
+
+    def set_x_range(self, minimum: float, maximum: float, *, padding: float = 0.0) -> None:
+        """Set the visible x-axis range."""
+        self.plot.setXRange(float(minimum), float(maximum), padding=float(padding))
+
+    def set_y_range(self, minimum: float, maximum: float, *, padding: float = 0.0) -> None:
+        """Set the visible y-axis range."""
+        self.plot.setYRange(float(minimum), float(maximum), padding=float(padding))
+
+    def set_ranges(
+        self,
+        *,
+        x: Optional[Tuple[float, float]] = None,
+        y: Optional[Tuple[float, float]] = None,
+        padding: float = 0.0,
+    ) -> None:
+        """Set x and/or y visible ranges in one call."""
+        if x is not None:
+            self.set_x_range(x[0], x[1], padding=padding)
+        if y is not None:
+            self.set_y_range(y[0], y[1], padding=padding)
+
+    def auto_range(self, *, x: bool = True, y: bool = True, padding: Optional[float] = None) -> None:
+        """Auto-fit the view to the current data."""
+        kwargs = {}
+        if padding is not None:
+            kwargs["padding"] = float(padding)
+        self.plot.enableAutoRange(axis="x", enable=bool(x))
+        self.plot.enableAutoRange(axis="y", enable=bool(y))
+        self.plot.autoRange(**kwargs)
+
+    def set_log_mode(self, *, x: object = False, y: object = False) -> None:
+        """Enable or disable logarithmic display for each axis."""
+        self._log_x = self._coerce_bool(x, "log_x")
+        self._log_y = self._coerce_bool(y, "log_y")
+        self.plot.setLogMode(x=self._log_x, y=self._log_y)
+
+    def enable_crosshair(self, enabled: bool = True, *, show_label: bool = True) -> None:
+        """Show a mouse-following crosshair and emit cursorPositionChanged."""
+        enabled = bool(enabled)
+        self._crosshair_label_visible = bool(show_label)
+        if enabled == self._crosshair_enabled:
+            self._set_crosshair_items_visible(enabled)
+            return
+
+        if enabled:
+            self._ensure_crosshair_items()
+            self.plot.scene().sigMouseMoved.connect(self._on_mouse_moved)
+            self._crosshair_enabled = True
+            self._set_crosshair_items_visible(True)
+        else:
             try:
-                self._grid_alpha = max(0.0, float(alpha))
-            except (TypeError, ValueError):
+                self.plot.scene().sigMouseMoved.disconnect(self._on_mouse_moved)
+            except (TypeError, RuntimeError):
                 pass
-        self.plot.showGrid(x=self._show_grid_x, y=self._show_grid_y, alpha=self._grid_alpha)
+            self._crosshair_enabled = False
+            self._set_crosshair_items_visible(False)
+        self._sync_hover_toolbar_buttons()
+
+    def disable_crosshair(self) -> None:
+        """Hide and disconnect the crosshair."""
+        self.enable_crosshair(False)
 
     def set_titles(self, title: str = "", x: str = "", y: str = "") -> None:
         """Set plot and axis titles in one call."""
@@ -246,9 +520,7 @@ class BaseFigureWidget(QtWidgets.QWidget):
         self.set_titles("", "", "")
 
     def set_color_palette(self, palette: Sequence[str]) -> None:
-        """
-        Replace the color palette used for new and existing curves.
-        """
+        """Replace the color palette used for new and existing curves."""
         if not palette:
             return
         self.color_palette = list(palette)
@@ -256,10 +528,7 @@ class BaseFigureWidget(QtWidgets.QWidget):
             self._style_curve(curve, idx)
 
     def set_legend_position(self, position: str) -> None:
-        """
-        Move the legend to one of the four corners.
-        Valid values: 'top-left', 'top-right', 'bottom-left', 'bottom-right'.
-        """
+        """Move the legend to one of the four corners. Valid values: 'top-left', 'top-right', 'bottom-left', 'bottom-right'."""
         if not self.legend:
             return
 
@@ -277,7 +546,7 @@ class BaseFigureWidget(QtWidgets.QWidget):
         self.legend.anchor(itemPos=item_pos, parentPos=parent_pos, offset=offset)
 
     # Public API
-    def current_settings(self) -> dict:
+    def current_settings(self) -> FigureSettings:
         """Return a dict snapshot of plot configuration."""
         return {
             "mode": self.mode,
@@ -289,95 +558,258 @@ class BaseFigureWidget(QtWidgets.QWidget):
             "show_legend": self.show_legend,
             "show_grid_x": self.show_grid_x,
             "show_grid_y": self.show_grid_y,
+            "grid_alpha": self.grid_alpha,
+            "log_x": self.log_x,
+            "log_y": self.log_y,
         }
 
-    def apply_setting(self, settings: dict) -> None:
-        """Apply settings dict directly to the plot widget."""
-        self.mode = settings.get("mode", self.mode)
+    def apply_settings(self, settings: Mapping[str, object]) -> None:
+        """Apply visual settings to the plot widget.
 
-        try:
-            self.line_width = int(settings.get("line_width", self.line_width))
-        except (TypeError, ValueError):
-            pass
+        Unknown keys are ignored. Common persisted scalar values are coerced.
+        """
+        if not isinstance(settings, Mapping):
+            raise TypeError("settings must be a mapping")
 
-        try:
-            self.marker_size = int(settings.get("marker_size", self.marker_size))
-        except (TypeError, ValueError):
-            pass
+        if "mode" in settings:
+            self.mode = settings["mode"]
 
-        plot_title = settings.get("plot_title", "")
-        x_axis_title = settings.get("x_axis_title", "")
-        y_axis_title = settings.get("y_axis_title", "")
-        self.plot.setTitle(plot_title)
-        self.plot.setLabel("bottom", x_axis_title)
-        self.plot.setLabel("left", y_axis_title)
+        if "line_width" in settings:
+            self.line_width = settings["line_width"]
 
-        self.show_legend = bool(settings.get("show_legend", self.show_legend))
-        self.show_grid_x = bool(settings.get("show_grid_x", self.show_grid_x))
-        self.show_grid_y = bool(settings.get("show_grid_y", self.show_grid_y))
-        self.plot.showGrid(x=self.show_grid_x, y=self.show_grid_y, alpha=0.2)
+        if "marker_size" in settings:
+            self.marker_size = settings["marker_size"]
+
+        if "plot_title" in settings:
+            self.plot_title = self._coerce_text(settings["plot_title"], "plot_title")
+        if "x_axis_title" in settings:
+            self.x_axis_title = self._coerce_text(settings["x_axis_title"], "x_axis_title")
+        if "y_axis_title" in settings:
+            self.y_axis_title = self._coerce_text(settings["y_axis_title"], "y_axis_title")
+
+        if "show_legend" in settings:
+            self.show_legend = settings["show_legend"]
+
+        grid_x = (
+            self._coerce_bool(settings["show_grid_x"], "show_grid_x")
+            if "show_grid_x" in settings
+            else None
+        )
+        grid_y = (
+            self._coerce_bool(settings["show_grid_y"], "show_grid_y")
+            if "show_grid_y" in settings
+            else None
+        )
+        grid_alpha = (
+            self._coerce_unit_float(settings["grid_alpha"], "grid_alpha")
+            if "grid_alpha" in settings
+            else None
+        )
+        if grid_x is not None or grid_y is not None or grid_alpha is not None:
+            self.set_grid(x=grid_x, y=grid_y, alpha=grid_alpha)
+
+        if "log_x" in settings or "log_y" in settings:
+            self.set_log_mode(
+                x=(
+                    self._coerce_bool(settings["log_x"], "log_x")
+                    if "log_x" in settings
+                    else self.log_x
+                ),
+                y=(
+                    self._coerce_bool(settings["log_y"], "log_y")
+                    if "log_y" in settings
+                    else self.log_y
+                ),
+            )
 
         for curve in self._curves:
             self._style_curve(curve)
 
     def add_dataset(
         self,
-        y: np.ndarray | Sequence[float],
-        x: Optional[np.ndarray | Sequence[float]] = None,
+        y: DatasetInput,
+        x: Optional[DatasetInput] = None,
         *,
         name: str = "",
+        color: Optional[ColorInput] = None,
+        line_width: Optional[int] = None,
+        symbol: Optional[str] = "auto",
+        marker_size: Optional[int] = None,
+        visible: bool = True,
     ) -> pg.PlotDataItem:
         """
         Add a curve with optional x data. If x is None, indices are used.
+        h5py Dataset objects are accepted and read eagerly.
+
+        Optional style arguments override the widget defaults for this curve.
+        Use symbol="auto" to follow the widget mode, or symbol=None to force
+        markers off for this curve.
         """
         if y is None:
             raise ValueError("y cannot be None")
 
-        y_arr = np.asarray(y, dtype=float)
+        y_arr = self._to_1d_float_array(y, "y")
         if y_arr.size == 0:
             raise ValueError("y cannot be empty")
 
-        if y_arr.ndim > 1:
-            y_arr = y_arr.flatten()
-
         x_arr = None
         if x is not None:
-            x_arr = np.asarray(x, dtype=float)
-            if x_arr.ndim > 1:
-                x_arr = x_arr.flatten()
+            x_arr = self._to_1d_float_array(x, "x")
             if x_arr.shape != y_arr.shape:
                 raise ValueError("x and y must have the same shape")
         if x_arr is None:
             x_arr = np.arange(y_arr.size, dtype=float)
 
-        curve = self._new_curve(name=name or "Trace")
-        curve.setData(x_arr, y_arr)
-        curve.setClipToView(True)
+        curve = self._new_curve(
+            name=name or f"Trace {len(self._curves) + 1}",
+            color=color,
+            line_width=line_width,
+            symbol=symbol,
+            marker_size=marker_size,
+            visible=visible,
+        )
+        try:
+            curve.setData(x_arr, y_arr)
+            curve.setClipToView(True)
+        except Exception:
+            if curve in self._curves:
+                self._remove_curve_item(curve)
+            elif curve in self.plot.items():
+                self.plot.removeItem(curve)
+            raise
         return curve
+
+    def get_curve(self, curve: CurveReference) -> Optional[pg.PlotDataItem]:
+        """Return a curve by item or name, or None when it is not present."""
+        if isinstance(curve, pg.PlotDataItem):
+            return curve if curve in self._curves else None
+
+        for item in self._curves:
+            if item.name() == curve:
+                return item
+        return None
+
+    def require_curve(self, curve: CurveReference) -> pg.PlotDataItem:
+        """Return a curve by item or name, raising KeyError when missing."""
+        item = self.get_curve(curve)
+        if item is None:
+            raise KeyError(f"Unknown curve: {curve!r}")
+        return item
+
+    def curve_names(self) -> list[str]:
+        """Return non-empty curve names in display order."""
+        return [curve.name() for curve in self._curves if curve.name()]
+
+    def remove_curve(self, curve: CurveReference) -> pg.PlotDataItem:
+        """Remove a curve by item or name and return the removed item."""
+        item = self.require_curve(curve)
+        self._remove_curve_item(item)
+        return item
+
+    def clear_curve(self, curve: CurveReference) -> pg.PlotDataItem:
+        """Clear one curve's data without removing its style or legend entry."""
+        item = self.require_curve(curve)
+        item.setData([], [])
+        return item
+
+    def set_curve_visible(self, curve: CurveReference, visible: bool) -> pg.PlotDataItem:
+        """Show or hide one curve by item or name."""
+        item = self.require_curve(curve)
+        item.setVisible(bool(visible))
+        return item
+
+    def update_curve(
+        self,
+        curve: CurveReference,
+        y: Optional[DatasetInput] = None,
+        x: Optional[DatasetInput] = None,
+        *,
+        name: Optional[str] = None,
+        color: object = _UNSET,
+        line_width: object = _UNSET,
+        symbol: object = _UNSET,
+        marker_size: object = _UNSET,
+        visible: Optional[bool] = None,
+    ) -> pg.PlotDataItem:
+        """Update one curve's data, style, name, or visibility."""
+        item = self.require_curve(curve)
+
+        if y is not None:
+            y_arr = self._to_1d_float_array(y, "y")
+            if y_arr.size == 0:
+                raise ValueError("y cannot be empty")
+
+            if x is not None:
+                x_arr = self._to_1d_float_array(x, "x")
+                if x_arr.shape != y_arr.shape:
+                    raise ValueError("x and y must have the same shape")
+            elif item.xData is not None and item.xData.shape == y_arr.shape:
+                x_arr = item.xData
+            else:
+                x_arr = np.arange(y_arr.size, dtype=float)
+            item.setData(x_arr, y_arr)
+        elif x is not None:
+            if item.yData is None:
+                raise ValueError("cannot update x without existing y data")
+            x_arr = self._to_1d_float_array(x, "x")
+            if x_arr.shape != item.yData.shape:
+                raise ValueError("x and y must have the same shape")
+            item.setData(x_arr, item.yData)
+
+        if name is not None:
+            old_name = item.name()
+            item.opts["name"] = name
+            if self.legend is not None and old_name:
+                try:
+                    self.legend.removeItem(old_name)
+                    self.legend.addItem(item, name)
+                except Exception:
+                    pass
+
+        style = self._curve_style(item)
+        if color is not _UNSET:
+            style["color"] = color
+        if line_width is not _UNSET:
+            style["line_width"] = line_width
+        if symbol is not _UNSET:
+            style["symbol"] = symbol
+        if marker_size is not _UNSET:
+            style["marker_size"] = marker_size
+        if any(value is not _UNSET for value in (color, line_width, symbol, marker_size)):
+            self._style_curve(item)
+
+        if visible is not None:
+            item.setVisible(bool(visible))
+
+        return item
+
+    @staticmethod
+    def _to_1d_float_array(data: DatasetInput, label: str) -> np.ndarray:
+        if BaseFigureWidget._is_hdf5_dataset(data):
+            data = data[()]
+
+        arr = np.asarray(data, dtype=float)
+        if arr.ndim != 1:
+            raise ValueError(f"{label} must be one-dimensional")
+        return arr
+
+    @staticmethod
+    def _is_hdf5_dataset(data: object) -> bool:
+        return type(data).__module__.startswith("h5py.") and hasattr(data, "__getitem__")
 
     def clear_region(self, region: pg.LinearRegionItem) -> None:
         """Remove a specific LinearRegionItem if present."""
         if region in self.plot.items():
             self.plot.removeItem(region)
 
-    def add_vertical_region(
-        self,
-        start: float,
-        end: float,
-        *,
-        brush: Optional[QtGui.QBrush] = None,
-        bounds: Optional[Tuple[Optional[float], Optional[float]]] = None,
-    ) -> pg.LinearRegionItem:
-        """
-        Add a vertical LinearRegionItem with optional bounds.
-        """
+    def add_vertical_region(self, start: float, end: float, *, brush: Optional[QtGui.QBrush] = None, bounds: Optional[Tuple[Optional[float], Optional[float]]] = None) -> pg.LinearRegionItem:
+        """Add a vertical LinearRegionItem with optional bounds."""
         min_x, max_x = (None, None) if bounds is None else bounds
 
         if min_x is None or max_x is None:
-            all_x = np.concatenate([item.xData for item in self.plot.listDataItems() if item.xData is not None])
-            if all_x.size > 0:
-                min_x = float(np.min(all_x))
-                max_x = float(np.max(all_x))
+            data_range = self.x_values_range()
+            if data_range is not None:
+                min_x, max_x = data_range
 
         region = pg.LinearRegionItem(
             values=(start, end),
@@ -408,17 +840,11 @@ class BaseFigureWidget(QtWidgets.QWidget):
 
     def x_values_range(self) -> Optional[Tuple[float, float]]:
         """Return x value range across all curves."""
-        all_x = np.concatenate([item.xData for item in self.plot.listDataItems() if item.xData is not None])
-        if all_x.size == 0:
-            return None
-        return float(np.min(all_x)), float(np.max(all_x))
+        return self._data_range("xData")
 
     def y_values_range(self) -> Optional[Tuple[float, float]]:
         """Return y value range across all curves."""
-        all_y = np.concatenate([item.yData for item in self.plot.listDataItems() if item.yData is not None])
-        if all_y.size == 0:
-            return None
-        return float(np.min(all_y)), float(np.max(all_y))
+        return self._data_range("yData")
 
     def to_png(self, file_path: str) -> None:
         """Export the current plot to a PNG file."""
@@ -465,7 +891,7 @@ class BaseFigureWidget(QtWidgets.QWidget):
         """
         x_range = self.x_values_range()
         y_range = self.y_values_range()
-        if x_range is None and y_range is None:
+        if x_range is None or y_range is None:
             return None
         return x_range, y_range
 
@@ -473,19 +899,20 @@ class BaseFigureWidget(QtWidgets.QWidget):
         """Set plot background color (or None for transparent)."""
         self.plot.setBackground(color)
 
-    def repaint(self) -> None: 
+    def repaint(self, *args: object) -> None:
         """Force a repaint of the plot."""
+        super().repaint(*args)
         self.plot.repaint()
 
-    def update(self) -> None:
+    def update(self, *args: object) -> None:
         """Force a redraw of the plot."""
+        super().update(*args)
         self.plot.update()
 
     def clear_trace(self) -> None:
         """Clear all curves from the plot."""
-        for c in self._curves:
-            self.plot.removeItem(c)
-        self._curves.clear()
+        for curve in list(self._curves):
+            self._remove_curve_item(curve)
 
     def clear_regions(self) -> None:
         """Clear all region selectors from the plot."""
@@ -494,18 +921,94 @@ class BaseFigureWidget(QtWidgets.QWidget):
             self.plot.removeItem(reg)
 
     # Internals
-    def _new_curve(self, name: str) -> pg.PlotDataItem:
-        curve_index = len(self._curves)
-        color = self.color_palette[curve_index % len(self.color_palette)]
+    @staticmethod
+    def _coerce_mode(value: object) -> FigureMode:
+        if not isinstance(value, str):
+            raise ValueError(f"mode must be one of: {_ALLOWED_MODES}")
 
-        curve = pg.PlotDataItem(
-            pen=pg.mkPen(color, width=self.line_width) if "lines" in self.mode else None,
-            symbol="o" if "markers" in self.mode else None,
-            symbolSize=self.marker_size,
-            symbolBrush=pg.mkBrush(color),
-            name=name,
-        )
+        normalized = value.strip().lower().replace("_", "-").replace(" ", "")
+        if normalized in _ALLOWED_MODES:
+            return cast(FigureMode, normalized)
+        raise ValueError(f"mode must be one of: {_ALLOWED_MODES}")
+
+    @staticmethod
+    def _coerce_positive_int(value: object, label: str) -> int:
+        if isinstance(value, bool):
+            raise ValueError(f"{label} must be an integer")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} must be an integer") from exc
+
+        if not np.isfinite(number) or not number.is_integer():
+            raise ValueError(f"{label} must be an integer")
+        return max(1, int(number))
+
+    @staticmethod
+    def _coerce_unit_float(value: object, label: str) -> float:
+        if isinstance(value, bool):
+            raise ValueError(f"{label} must be a number between 0 and 1")
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} must be a number between 0 and 1") from exc
+
+        if not np.isfinite(number):
+            raise ValueError(f"{label} must be a number between 0 and 1")
+        return max(0.0, min(1.0, number))
+
+    @staticmethod
+    def _coerce_bool(value: object, label: str) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, np.bool_):
+            return bool(value)
+        if isinstance(value, (int, np.integer)):
+            if value in (0, 1):
+                return bool(value)
+            raise ValueError(f"{label} must be boolean-like")
+        if isinstance(value, (float, np.floating)):
+            if value in (0.0, 1.0):
+                return bool(value)
+            raise ValueError(f"{label} must be boolean-like")
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"1", "true", "t", "yes", "y", "on"}:
+                return True
+            if normalized in {"0", "false", "f", "no", "n", "off", ""}:
+                return False
+        raise ValueError(f"{label} must be boolean-like")
+
+    @staticmethod
+    def _coerce_text(value: object, label: str) -> str:
+        if value is None:
+            raise ValueError(f"{label} must be text")
+        return str(value)
+
+    def _apply_grid(self) -> None:
+        self.plot.showGrid(x=self._show_grid_x, y=self._show_grid_y, alpha=self._grid_alpha)
+
+    def _new_curve(
+        self,
+        name: str,
+        *,
+        color: Optional[ColorInput] = None,
+        line_width: Optional[int] = None,
+        symbol: Optional[str] = "auto",
+        marker_size: Optional[int] = None,
+        visible: bool = True,
+    ) -> pg.PlotDataItem:
+        curve_index = len(self._curves)
+
+        curve = pg.PlotDataItem(name=name)
+        curve._pyqt_widget_kit_style = {  # type: ignore[attr-defined]
+            "color": color,
+            "line_width": line_width,
+            "symbol": symbol,
+            "marker_size": marker_size,
+        }
         self._style_curve(curve, curve_index)
+        curve.setVisible(bool(visible))
         self.plot.addItem(curve)
         self._curves.append(curve)
         return curve
@@ -517,12 +1020,115 @@ class BaseFigureWidget(QtWidgets.QWidget):
             except ValueError:
                 curve_index = 0
 
-        color = self.color_palette[curve_index % len(self.color_palette)]
-        pen = pg.mkPen(color, width=self.line_width) if "lines" in self.mode else None
-        sym = "o" if "markers" in self.mode else None
+        style = self._curve_style(curve)
+        color = style.get("color") or self.color_palette[curve_index % len(self.color_palette)]
+        line_width = self._positive_int(style.get("line_width"), self.line_width)
+        marker_size = self._positive_int(style.get("marker_size"), self.marker_size)
+        symbol = style.get("symbol", "auto")
+
+        pen = pg.mkPen(color, width=line_width) if "lines" in self.mode else None
+        if symbol == "auto":
+            sym = "o" if "markers" in self.mode else None
+        else:
+            sym = symbol
+
         curve.setPen(pen)
         curve.setSymbol(sym)
         if sym:
-            curve.setSymbolSize(self.marker_size)
+            curve.setSymbolSize(marker_size)
             curve.setSymbolBrush(pg.mkBrush(color))
         curve.setClipToView(True)
+
+    def _curve_style(self, curve: pg.PlotDataItem) -> dict:
+        style = getattr(curve, "_pyqt_widget_kit_style", None)
+        if style is None:
+            style = {}
+            curve._pyqt_widget_kit_style = style  # type: ignore[attr-defined]
+        return style
+
+    def _remove_curve_item(self, curve: pg.PlotDataItem) -> None:
+        if self.legend is not None and curve.name():
+            try:
+                self.legend.removeItem(curve.name())
+            except Exception:
+                pass
+        if curve in self.plot.items():
+            self.plot.removeItem(curve)
+        if curve in self._curves:
+            self._curves.remove(curve)
+
+    def _data_range(self, attribute: str) -> Optional[Tuple[float, float]]:
+        arrays = []
+        for item in self._curves:
+            data = getattr(item, attribute, None)
+            if data is None:
+                continue
+            arr = np.asarray(data, dtype=float).reshape(-1)
+            if arr.size:
+                arrays.append(arr)
+
+        if not arrays:
+            return None
+
+        values = np.concatenate(arrays)
+        values = values[np.isfinite(values)]
+        if values.size == 0:
+            return None
+        return float(np.min(values)), float(np.max(values))
+
+    @staticmethod
+    def _positive_int(value: object, default: int) -> int:
+        try:
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return default
+
+    def _ensure_crosshair_items(self) -> None:
+        if self._crosshair_vline is not None and self._crosshair_hline is not None:
+            return
+
+        pen = pg.mkPen(QtGui.QColor(80, 80, 80, 180), width=1, style=QtCore.Qt.PenStyle.DashLine)
+        self._crosshair_vline = pg.InfiniteLine(angle=90, movable=False, pen=pen)
+        self._crosshair_hline = pg.InfiniteLine(angle=0, movable=False, pen=pen)
+        self._crosshair_label = pg.TextItem(
+            anchor=(1, 1),
+            fill=pg.mkBrush(255, 255, 255, 220),
+            border=pg.mkPen(QtGui.QColor(80, 80, 80, 180)),
+        )
+
+        plot_item = self.plot.getPlotItem()
+        plot_item.addItem(self._crosshair_vline, ignoreBounds=True)
+        plot_item.addItem(self._crosshair_hline, ignoreBounds=True)
+        plot_item.addItem(self._crosshair_label, ignoreBounds=True)
+        self._set_crosshair_items_visible(False)
+
+    def _set_crosshair_items_visible(self, visible: bool) -> None:
+        for item in (self._crosshair_vline, self._crosshair_hline):
+            if item is not None:
+                item.setVisible(bool(visible))
+        if self._crosshair_label is not None:
+            self._crosshair_label.setVisible(bool(visible and self._crosshair_label_visible))
+
+    def _on_mouse_moved(self, pos: QtCore.QPointF) -> None:
+        if not self._crosshair_enabled:
+            return
+
+        view_box = self.plot.getViewBox()
+        if view_box is None or not view_box.sceneBoundingRect().contains(pos):
+            self._set_crosshair_items_visible(False)
+            return
+
+        mouse_point = view_box.mapSceneToView(pos)
+        x = float(mouse_point.x())
+        y = float(mouse_point.y())
+
+        if self._crosshair_vline is not None:
+            self._crosshair_vline.setPos(x)
+        if self._crosshair_hline is not None:
+            self._crosshair_hline.setPos(y)
+        if self._crosshair_label is not None:
+            self._crosshair_label.setText(f"x={x:.6g}\ny={y:.6g}")
+            self._crosshair_label.setPos(x, y)
+
+        self._set_crosshair_items_visible(True)
+        self.cursorPositionChanged.emit(x, y)

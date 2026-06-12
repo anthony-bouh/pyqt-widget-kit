@@ -9,6 +9,9 @@ def test_public_widgets_import() -> None:
     assert pyqt_widget_kit.IconButton.__name__ == "IconButton"
     assert pyqt_widget_kit.RightLeftButton.__name__ == "RightLeftButton"
     assert pyqt_widget_kit.BaseFigureWidget.__name__ == "BaseFigureWidget"
+    assert pyqt_widget_kit.FigureSettings.__name__ == "FigureSettings"
+    assert pyqt_widget_kit.ScatterFigureWidget.__name__ == "ScatterFigureWidget"
+    assert pyqt_widget_kit.ScatterPointPayload.__name__ == "ScatterPointPayload"
     assert not any(name.startswith("My") for name in pyqt_widget_kit.__all__)
 
 

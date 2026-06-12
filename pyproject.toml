@@ -39,6 +39,9 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/anthony-bouh/pyqt-widget-kit"
 Source = "https://github.com/anthony-bouh/pyqt-widget-kit"
+Changelog = "https://github.com/anthony-bouh/pyqt-widget-kit/blob/main/CHANGELOG.md"
+Releases = "https://github.com/anthony-bouh/pyqt-widget-kit/releases"
+Issues = "https://github.com/anthony-bouh/pyqt-widget-kit/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
