@@ -23,7 +23,7 @@ python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git"
 From a specific GitHub release tag:
 
 ```bash
-python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git@v0.1.0"
+python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git@v1.1.0"
 ```
 
 Check the version currently installed in the active Python environment:
@@ -140,8 +140,8 @@ numbers:
 - `MINOR` changes add backward-compatible features.
 - `PATCH` changes fix bugs without changing the public API.
 
-While the package is still below `1.0.0`, public APIs may change as the widget
-set settles. Breaking changes are called out in the release notes and in the
+From `1.0.0` onward, breaking public API changes should use a new major
+version. Breaking changes are called out in the release notes and in the
 [changelog](CHANGELOG.md).
 
 GitHub release notes are generated from merged pull requests. Use labels such
