@@ -296,7 +296,6 @@ class BaseFigureWidget(QtWidgets.QWidget):
             ("grid_x", "Toggle grid X", 'ico/grip-lines-vertical.png', self._toolbar_toggle_grid_x, True),
             ("grid_y", "Toggle grid Y", 'ico/grip-lines-horizontal.png', self._toolbar_toggle_grid_y, True),
             ("crosshair", "Toggle crosshair", 'ico/square-crosshair.png', self._toolbar_toggle_crosshair, True),
-            ("add_region", "Add region", 'ico/square-dashed-circle-plus.png', lambda: self.add_vertical_region(0, 1), False),
             ("clear_regions", "Clear regions", 'ico/square-dashed-circle-minus.png', self.clear_regions, False),
             ("clear_curves", "Clear curves", 'ico/cross.png', self.clear_trace, False),
         ]
@@ -1032,7 +1031,11 @@ class BaseFigureWidget(QtWidgets.QWidget):
         else:
             sym = symbol
 
-        curve.setPen(pen)
+        if pen is None:
+            curve.setPen(None)
+            curve.opts["pen"] = None
+        else:
+            curve.setPen(pen)
         curve.setSymbol(sym)
         if sym:
             curve.setSymbolSize(marker_size)

@@ -26,6 +26,3 @@ Thumbs.db
 
 # Local-only manual playgrounds
 dev_tools/
-
-# Hidden development files
-src/pyqt_widget_kit/settings/
