@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pyqt-widget-kit"
 version = "1.1.0"
-description = "Reusable PyQt6 widgets and settings UI helpers."
+description = "Reusable PyQt6 widgets and graph helpers."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }

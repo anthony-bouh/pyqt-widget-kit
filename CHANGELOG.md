@@ -7,6 +7,11 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+
+- Removed the `pyqt_widget_kit.settings` package, its dedicated stylesheet,
+  settings-window documentation, and settings-window demo.
+
 ## [1.1.0] - 2026-06-12
 
 ### Added

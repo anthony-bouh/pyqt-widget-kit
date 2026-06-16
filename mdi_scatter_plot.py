@@ -13,8 +13,7 @@ from src.utils.bus_event import bus
 from src.domain.models import FileNode
 from src.utils.ressource_path import resource_path
 
-from pyqt_widget_kit import IconButton, StringFilterLineEdit
-from .settings import SettingsWindow
+from pyqt_widget_kit import IconButton
 from .pyqt_graph import BaseFigureWidget
 
 
@@ -674,10 +673,6 @@ class MDIScatter(QtWidgets.QMdiSubWindow):
         self.button_menu.setToolTip("Menu")
         self.button_menu.setMenu(self.init_menu())
         
-        self.button_settings = IconButton(icon=resource_path('./src/ico/settings.png'))
-        self.button_settings.setToolTip("Plot Settings")
-        self.button_settings.clicked.connect(self.show_settings)
-
         self.button_tree = IconButton(icon=resource_path('./src/ico/tree.png'))
         self.button_tree.setCheckable(True)
         self.button_tree.setToolTip("Plot Tree Selection")
@@ -692,7 +687,6 @@ class MDIScatter(QtWidgets.QMdiSubWindow):
         self.menu_layout.addWidget(self.button_tree)
         self.menu_layout.addWidget(self.button_clear)
         self.menu_layout.addWidget(self.button_menu)
-        self.menu_layout.addWidget(self.button_settings)
         self.menu_layout.addStretch(1)
 
         self.menu = QtWidgets.QWidget(container)
@@ -830,11 +824,6 @@ class MDIScatter(QtWidgets.QMdiSubWindow):
         except Exception as ex:
             bus.log_info(f"Error saving PNG: {ex}")
             
-    def show_settings(self) -> None:
-        """Show the plot settings dialog."""
-        self.settings_window = ScatterPlotSettingsWindow(self.fig)
-        self.settings_window.show()
-        
     def tree_selection_changed(self, nodes: FileNode | list[FileNode] | tuple[FileNode, ...] | None) -> None:
         """
         Handle the event when an item is selected in the explorer tree.
@@ -865,219 +854,3 @@ class MDIScatter(QtWidgets.QMdiSubWindow):
         self.fig.clear()
         self.fig.files = paths
         self.fig.read_files()
-
-
-class ScatterPlotSettingsWindow(SettingsWindow):
-    """
-    Settings window for configuring plot appearance and data selection.
-    Provides controls for data filtering, axis formatting, and plot style.
-    """
-    title = "Scatter Plot Settings"
-    
-    def __init__(self, graph_view: ScatterFigureWidget) -> None:
-        """
-        Initialize the settings window with a reference to the graph view.
-        
-        Parameters:
-        -----------
-        graph_view : The graph view widget containing plot configuration and data
-        """
-        super().__init__()
-        
-        # Inner variables
-        self.fig = graph_view
-        
-        # Buttons
-        self.okButton = self.add_button("Done", self.close, validate=True)
-        self.applyButton = self.add_button("Apply", self.apply, validate=True)
-        
-        self._init_settings()
-        
-    def _init_settings(self) -> None:
-        """Set up all UI controls for the plot settings window."""
-        data = self.add_section("Data")
-        formatting = self.add_section("Formatting")
-        formatting_title = formatting.add_section("Title")
-        formatting_axis = formatting.add_section("Axis")
-        formatting_plot_type = formatting.add_section("Plot Type")
-
-        self._regex_x = data.add_regex(
-            key='scatter.regex_x',
-            title='X Data',
-            value=self.fig.regex_x,
-            subtitle='Enter python regular expression',
-            description='Use a python regular expression to capture data that will be used as X values.',
-        ).widget
-
-        self._regex_y = data.add_regex(
-            key='scatter.regex_y',
-            title='Y Data',
-            value=self.fig.regex_y,
-            subtitle='Enter Python regular expression',
-            description='Use a python regular expression to capture data that will be used as Y values.',
-        ).widget
-
-        self._filter = StringFilterLineEdit()
-        self._filter.setText(self.fig.filter)
-        data.add_widget(
-            key='scatter.dataset_filter',
-            title='Dataset Filter',
-            subtitle='String that filters datasets based on attribute values.',
-            description=(
-                "Use the following notation to filter out data from selection.\n"
-                "Allowed operators are '==' '!=' '<' '<=' '>' '>='. ';' can be used to separate filters.\n"
-                "Example of use: settings/ap*==3;settings/ae/unit='mm'"
-            ),
-            widget=self._filter,
-            validator=lambda _value: None if self._filter.isValid() else "Enter a valid dataset filter.",
-        )
-
-        self._group_by = data.add_regex(
-            key='scatter.group_by',
-            title='Group By Attribute',
-            value=self.fig.group_by,
-            subtitle='String that allows to group-by data series based on attribute values.',
-            description=(
-                "Provide a python regular expression to group data series based on attribute values. "
-                "Datasets with the same attribute value will be grouped together in the same series."
-            ),
-        ).widget
-
-        self._show_legend = formatting.add_bool(
-            key='scatter.show_legend',
-            title='Show Legend',
-            value=self.fig.legend.isVisible(),
-            subtitle='Toggle the visibility of the legend on the plot.',
-            description="Check to display the legend that identifies different data series on the plot.",
-        ).widget
-        self._show_legend.setText("Show legend")
-
-        self._show_grid_x = formatting.add_bool(
-            key='scatter.show_grid_x',
-            title='Show Grid X',
-            value=bool(self.fig.settings.get('show_grid_x', True)),
-            subtitle='Toggle X-axis grid lines.',
-            description='Check to display vertical grid lines on the plot for better readability.',
-        ).widget
-        self._show_grid_x.setText("Show grid X")
-
-        self._show_grid_y = formatting.add_bool(
-            key='scatter.show_grid_y',
-            title='Show Grid Y',
-            value=bool(self.fig.settings.get('show_grid_y', True)),
-            subtitle='Toggle Y-axis grid lines.',
-            description='Check to display horizontal grid lines on the plot for better readability.',
-        ).widget
-        self._show_grid_y.setText("Show grid Y")
-
-        title_text = self.fig.plot.windowTitle()
-        self._title = formatting_title.add_text(
-            key='scatter.plot_title',
-            title='Plot Title',
-            value=title_text,
-            subtitle='Set the plot title.',
-            description='Enter a custom title for your plot. This will appear at the top of the plot area.',
-        ).widget
-
-        x_text = self.fig.plot.getAxis('bottom').labelText
-        self._x_title = formatting_axis.add_text(
-            key='scatter.x_axis_title',
-            title='X Axis Title',
-            value=x_text,
-            subtitle='Set the X-axis label.',
-            description='Enter a label for the X-axis to describe the data shown horizontally.',
-        ).widget
-
-        y_text = self.fig.plot.getAxis('left').labelText
-        self._y_title = formatting_axis.add_text(
-            key='scatter.y_axis_title',
-            title='Y Axis Title',
-            value=y_text,
-            subtitle='Set the Y-axis label.',
-            description='Enter a label for the Y-axis to describe the data shown vertically.',
-        ).widget
-
-        mode = self.fig.settings.get('mode', 'markers')
-        if mode not in ('markers', 'lines', 'lines+markers'):
-            mode = 'markers'
-        self.mode = formatting_plot_type.add_choice(
-            key='scatter.mode',
-            title='Plot Type',
-            options=['markers', 'lines', 'lines+markers'],
-            value=mode,
-            subtitle='Choose the plot style.',
-            description='Select whether to display data as lines, markers, or both.',
-        ).widget
-        self.mode.setMaximumWidth(200)
-
-        self.line_width = formatting_plot_type.add_int(
-            key='scatter.line_width',
-            title='Line Width',
-            value=self.fig.settings.get('line_width', 1),
-            minimum=1,
-            maximum=10,
-            subtitle='Set the line thickness.',
-            description='Adjust the thickness of lines in the plot (if lines are enabled).',
-        ).widget
-        self.line_width.setMaximumWidth(80)
-
-        self.marker_size = formatting_plot_type.add_int(
-            key='scatter.marker_size',
-            title='Marker Size',
-            value=self.fig.settings.get('marker_size', 6),
-            minimum=1,
-            maximum=20,
-            subtitle='Set the marker size.',
-            description='Adjust the size of markers in the plot (if markers are enabled).',
-        ).widget
-        self.marker_size.setMaximumWidth(80)
-
-    def validate_window(self) -> str | None:
-        if not hasattr(self, "_regex_y"):
-            return None
-        if not self._regex_y.text().strip():
-            return "Y Data regex cannot be empty."
-        return None
-    
-    def apply(self) -> None:
-        """Apply the current settings to the graph view."""
-        
-        self.fig.plot.setTitle(self._title.text())
-        self.fig.plot.setLabel('bottom', self._x_title.text())
-        self.fig.plot.setLabel('left', self._y_title.text())
-
-        grid = self.fig.settings.get('show_grid', {'x': True, 'y': True, 'alpha': 0.3})
-        self.fig.plot.showGrid(x=grid.get('x', True), y=grid.get('y', True), alpha=grid.get('alpha', 0.3))
-        self.fig.legend.setVisible(bool(self._show_legend.isChecked()))
-
-        x = bool(self._show_grid_x.isChecked())  # Default to True if not specified
-        y = bool(self._show_grid_y.isChecked())  # Default to True if not specified
-        self.fig.plot.showGrid(x=x, y=y, alpha=0.3)
-        
-        marker_size = int(self.marker_size.value())
-        # Update existing scatter items
-        for scatter in self.fig.scatter_items:
-            scatter.setSize(marker_size)
-        
-        mode = self.mode.currentText()
-        if mode not in ('lines', 'markers', 'lines+markers'):
-            mode = 'markers'
-        # Apply mode to existing curves
-        for c in self.fig.curves:
-            pen = pg.mkPen(c.opts['pen'].color(), width=self.line_width.value()) if ('lines' in mode) else None
-            sym = 'o' if ('markers' in mode) else None
-            c.setPen(pen)
-            c.setSymbol(sym)
-            if sym:
-                c.setSymbolSize(marker_size)  
-            
-        line_width = int(self.line_width.value())
-        # Update existing curves
-        for c in self.fig.curves:
-            pen = pg.mkPen(c.opts['pen'].color(), width=line_width) if ('lines' in mode) else None
-            c.setPen(pen)
-                
-        self.fig.regex_x = self._regex_x.text()
-        self.fig.regex_y = self._regex_y.text()
-        self.fig.set_filter(self._filter.text())
-        self.fig.set_group_by(self._group_by.text())

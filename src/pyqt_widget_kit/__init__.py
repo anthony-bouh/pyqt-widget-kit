@@ -1,4 +1,4 @@
-"""Reusable PyQt6 widgets and settings helpers."""
+"""Reusable PyQt6 widgets and graph helpers."""
 
 from .buttons import IconButton, IconMenuButton, RightLeftButton, UpDownButton
 from .combo_boxes import AutoWidthComboBox, HistoryComboBox, SearchableComboBox
