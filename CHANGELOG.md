@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-06-16
+
 ### Removed
 
 - Removed the `pyqt_widget_kit.settings` package, its dedicated stylesheet,
@@ -36,5 +38,6 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - GitHub Actions test workflow now installs Qt runtime libraries required for
   PyQt6 imports on Ubuntu runners.
 
-[Unreleased]: https://github.com/anthony-bouh/pyqt-widget-kit/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/anthony-bouh/pyqt-widget-kit/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v2.0.0
 [1.1.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v1.1.0

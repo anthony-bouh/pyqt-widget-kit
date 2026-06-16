@@ -23,7 +23,7 @@ python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git"
 From a specific GitHub release tag:
 
 ```bash
-python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git@v1.1.0"
+python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git@v2.0.0"
 ```
 
 Check the version currently installed in the active Python environment:
@@ -118,6 +118,17 @@ version. Breaking changes are called out in the release notes and in the
 GitHub release notes are generated from merged pull requests. Use labels such
 as `breaking-change`, `enhancement`, `bug`, `documentation`, and
 `dependencies` to place changes in the right release-note section.
+
+To publish a release, update `pyproject.toml` and `CHANGELOG.md`, commit the
+changes, then push the matching version tag:
+
+```bash
+git tag -a v2.0.0 -m "v2.0.0"
+git push origin main v2.0.0
+```
+
+The release workflow only runs for pushed `vX.Y.Z` tags. If a tag event needs
+to be retried, run the `Release` workflow manually with the same tag.
 
 ## Project Layout
 
