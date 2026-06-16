@@ -1,4 +1,14 @@
 
+QWidget[pyqtWidgetKitRole="base-figure-plot"] {
+    border:             none;
+    background:         transparent;
+}
+
+QWidget#BaseFigureWidgetHoverToolbar {
+    background-color:   rgba(255, 255, 255, 220);
+    border-radius:      4px;
+}
+
 RegexLineEdit {
     border-radius:      4px;
     border:             1px solid palette(mid);

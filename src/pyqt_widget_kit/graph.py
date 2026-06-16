@@ -84,6 +84,8 @@ class BaseFigureWidget(QtWidgets.QWidget):
         "#bcbd22",
         "#17becf",
     ]
+    _PLOT_FONT_FAMILY = "Segoe UI"
+    _PLOT_TITLE_SIZE = "10pt"
 
     cursorPositionChanged = QtCore.pyqtSignal(float, float)
 
@@ -120,19 +122,19 @@ class BaseFigureWidget(QtWidgets.QWidget):
         self.toolbar_buttons: dict[str, IconButton] = {}
         self._setup_hover_toolbar()
 
+        self.plot.setProperty("pyqtWidgetKitRole", "base-figure-plot")
         self.plot.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
-        self.plot.setStyleSheet("border: none; background: transparent;")
         self.plot.setBackground(None)
         self.plot.showAxis("top", True)
         self.plot.showAxis("right", True)
-        self._apply_grid()
-        self.plot.getAxis("top").setStyle(showValues=False)
-        self.plot.getAxis("right").setStyle(showValues=False)
 
         view_box = self.plot.getViewBox()
         if view_box:
             view_box.setBorder(None)
             view_box.setBackgroundColor(None)
+
+        self._style_plot()
+        self._apply_grid()
 
         if self.legend:
             self.legend.layout.setColumnMinimumWidth(0, 10)
@@ -277,14 +279,6 @@ class BaseFigureWidget(QtWidgets.QWidget):
     def _setup_hover_toolbar(self) -> None:
         self.hover_toolbar.setObjectName("BaseFigureWidgetHoverToolbar")
         self.hover_toolbar.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.hover_toolbar.setStyleSheet(
-            """
-            QWidget#BaseFigureWidgetHoverToolbar {
-                background-color: rgba(255, 255, 255, 220);
-                border-radius: 4px;
-            }
-            """
-        )
 
         layout = QtWidgets.QHBoxLayout(self.hover_toolbar)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -296,6 +290,7 @@ class BaseFigureWidget(QtWidgets.QWidget):
             ("grid_x", "Toggle grid X", 'ico/grip-lines-vertical.png', self._toolbar_toggle_grid_x, True),
             ("grid_y", "Toggle grid Y", 'ico/grip-lines-horizontal.png', self._toolbar_toggle_grid_y, True),
             ("crosshair", "Toggle crosshair", 'ico/square-crosshair.png', self._toolbar_toggle_crosshair, True),
+            ("export_png", "Export PNG", 'ico/camera.png', self._toolbar_export_png, False),
             ("clear_regions", "Clear regions", 'ico/square-dashed-circle-minus.png', self.clear_regions, False),
             ("clear_curves", "Clear curves", 'ico/cross.png', self.clear_trace, False),
         ]
@@ -379,24 +374,40 @@ class BaseFigureWidget(QtWidgets.QWidget):
     def _toolbar_toggle_crosshair(self) -> None:
         self.enable_crosshair(not self.crosshair_enabled)
 
-    # Styling and theme
-    def set_theme(self) -> None:
-        """Apply palette, axis styling, and legend theme."""
-        
-        # TODO Theme integration - this is a placeholder until we have a real theme manager
-        theme = {
-            "text": "#333333",
-            "accent": "#0078d4",
+    def _toolbar_export_png(self) -> None:
+        file_path, _selected_filter = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Export chart as PNG",
+            "",
+            "PNG images (*.png)",
+        )
+        if not file_path:
+            return
+        if not file_path.lower().endswith(".png"):
+            file_path = f"{file_path}.png"
+        self.to_png(file_path)
+
+    # Styling
+    def _style_plot(self) -> None:
+        """Apply the pyqtgraph-specific styling that QSS cannot reach."""
+        text_color = self.palette().color(QtGui.QPalette.ColorRole.WindowText)
+        base_color = self.palette().color(QtGui.QPalette.ColorRole.Base)
+        title_style = {
+            "color": text_color.name(),
+            "size": self._PLOT_TITLE_SIZE,
+            "family": self._PLOT_FONT_FAMILY,
         }
-
-        title_style = {"color": theme["text"], "size": "10pt", "font-family": "Segoe UI"}
         plot_item = self.plot.getPlotItem()
-        current_title = plot_item.titleLabel.text if hasattr(plot_item, "titleLabel") else ""
-        self.plot.setTitle(current_title, **title_style)
+        if hasattr(plot_item, "titleLabel"):
+            for key, value in title_style.items():
+                plot_item.titleLabel.setAttr(key, value)
+            current_title = plot_item.titleLabel.text
+            if current_title:
+                self.plot.setTitle(current_title, **title_style)
 
-        border_pen = pg.mkPen(theme["text"], width=1)
-        label_pen = pg.mkPen(theme["text"])
-        tick_font = QtGui.QFont("Segoe UI")
+        border_pen = pg.mkPen(text_color, width=1)
+        label_pen = pg.mkPen(text_color)
+        tick_font = QtGui.QFont(self._PLOT_FONT_FAMILY)
         for axis_name in ("left", "bottom", "top", "right"):
             axis = self.plot.getAxis(axis_name)
             if not axis:
@@ -410,8 +421,10 @@ class BaseFigureWidget(QtWidgets.QWidget):
                 axis.setStyle(showValues=True)
 
         if self.legend:
-            self.legend.setPen(pg.mkPen(theme["text"], width=1))
-            self.legend.setBrush(pg.mkBrush(255, 255, 255, 230))
+            legend_background = QtGui.QColor(base_color)
+            legend_background.setAlpha(230)
+            self.legend.setPen(border_pen)
+            self.legend.setBrush(pg.mkBrush(legend_background))
 
     def set_legend_visibility(self, show: bool) -> None:
         """Convenience wrapper to toggle legend visibility."""

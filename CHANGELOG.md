@@ -7,6 +7,23 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-06-16
+
+### Added
+
+- Camera toolbar action for exporting `BaseFigureWidget` charts as PNG files.
+
+### Changed
+
+- Moved figure toolbar and plot-shell Qt styling into the packaged
+  `widgets.qss` stylesheet.
+- Applied pyqtgraph-specific plot, axis, and legend styling during
+  `BaseFigureWidget` initialization.
+
+### Removed
+
+- Removed the public `BaseFigureWidget.set_theme()` placeholder method.
+
 ## [2.0.0] - 2026-06-16
 
 ### Removed
@@ -38,6 +55,7 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - GitHub Actions test workflow now installs Qt runtime libraries required for
   PyQt6 imports on Ubuntu runners.
 
-[Unreleased]: https://github.com/anthony-bouh/pyqt-widget-kit/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/anthony-bouh/pyqt-widget-kit/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v3.0.0
 [2.0.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v2.0.0
 [1.1.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v1.1.0

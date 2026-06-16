@@ -34,4 +34,6 @@ def test_stylesheets_are_available() -> None:
     assert widgets_stylesheet.exists()
 
     assert "RegexLineEdit" in load_stylesheet("widgets.qss")
+    assert 'pyqtWidgetKitRole="base-figure-plot"' in load_stylesheet("widgets.qss")
+    assert "BaseFigureWidgetHoverToolbar" in load_stylesheet("widgets.qss")
     assert "RegexLineEdit" in load_stylesheets("widgets.qss")

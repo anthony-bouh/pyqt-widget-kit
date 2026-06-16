@@ -113,6 +113,15 @@ def test_empty_ranges_and_regions_do_not_crash(figure: BaseFigureWidget) -> None
     assert region in figure.plot.items()
 
 
+def test_plot_style_is_initialized_without_public_theme_api(figure: BaseFigureWidget) -> None:
+    assert not hasattr(figure, "set_theme")
+    assert figure.plot.property("pyqtWidgetKitRole") == "base-figure-plot"
+    assert figure.plot.frameShape() == QtWidgets.QFrame.Shape.NoFrame
+    assert figure.plot.getPlotItem().titleLabel.isVisible() is False
+    assert figure.plot.getAxis("top").style["showValues"] is False
+    assert figure.plot.getAxis("right").style["showValues"] is False
+
+
 def test_data_ranges_ignore_nan_values(figure: BaseFigureWidget) -> None:
     figure.add_dataset([1.0, np.nan, 3.0], x=[0.0, 1.0, 2.0])
 
@@ -256,6 +265,7 @@ def test_hover_toolbar_exists_and_is_hidden_by_default(figure: BaseFigureWidget)
         "grid_x",
         "grid_y",
         "crosshair",
+        "export_png",
         "clear_regions",
         "clear_curves",
     }
@@ -281,6 +291,24 @@ def test_hover_toolbar_can_be_shown_and_syncs_button_state(figure: BaseFigureWid
     assert figure.toolbar_buttons["grid_x"].isChecked() is False
     assert figure.toolbar_buttons["grid_y"].isChecked() is False
     assert figure.toolbar_buttons["crosshair"].isChecked() is True
+
+
+def test_hover_toolbar_export_png_button_uses_save_dialog(
+    figure: BaseFigureWidget,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exported_paths: list[str] = []
+
+    monkeypatch.setattr(
+        QtWidgets.QFileDialog,
+        "getSaveFileName",
+        lambda *_args, **_kwargs: ("chart-export", "PNG images (*.png)"),
+    )
+    monkeypatch.setattr(figure, "to_png", lambda file_path: exported_paths.append(file_path))
+
+    figure.toolbar_buttons["export_png"].click()
+
+    assert exported_paths == ["chart-export.png"]
 
 
 def test_hover_toolbar_buttons_call_basic_features(figure: BaseFigureWidget) -> None:
