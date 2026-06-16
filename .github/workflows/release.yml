@@ -23,21 +23,33 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ env.RELEASE_TAG }}
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Validate release tag and package version
+      - name: Validate release tag format
         run: |
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Release tag must match vX.Y.Z, got '$RELEASE_TAG'."
             exit 1
           fi
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check out existing manual release tag
+        id: manual-tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            git fetch --depth=1 origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+            git checkout --detach "$RELEASE_TAG"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate package version
+        run: |
           package_version="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])')"
           expected_version="${RELEASE_TAG#v}"
 
@@ -45,6 +57,14 @@ jobs:
             echo "::error::pyproject.toml version '$package_version' does not match tag '$RELEASE_TAG'."
             exit 1
           fi
+
+      - name: Create missing manual release tag
+        if: github.event_name == 'workflow_dispatch' && steps.manual-tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$RELEASE_TAG" -m "$RELEASE_TAG" HEAD
+          git push origin "refs/tags/$RELEASE_TAG"
 
       - name: Install build backend
         run: python -m pip install build

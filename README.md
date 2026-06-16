@@ -127,8 +127,10 @@ git tag -a v2.0.0 -m "v2.0.0"
 git push origin main v2.0.0
 ```
 
-The release workflow only runs for pushed `vX.Y.Z` tags. If a tag event needs
-to be retried, run the `Release` workflow manually with the same tag.
+The release workflow runs automatically for pushed `vX.Y.Z` tags. If the tag
+event was missed, run the `Release` workflow manually from the commit you want
+to release and provide the same tag. If that tag does not exist yet, the manual
+workflow creates it from the selected commit before publishing the release.
 
 ## Project Layout
 
