@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6 import QtWidgets
 import pyqtgraph as pg
 
+import pyqt_widget_kit.graph as graph_module
 from pyqt_widget_kit.graph import BaseFigureWidget
 
 
@@ -261,6 +262,7 @@ def test_crosshair_can_be_enabled_and_disabled(figure: BaseFigureWidget) -> None
 def test_hover_toolbar_exists_and_is_hidden_by_default(figure: BaseFigureWidget) -> None:
     expected_buttons = {
         "auto_range",
+        "plot_options",
         "legend",
         "grid_x",
         "grid_y",
@@ -310,6 +312,71 @@ def test_hover_toolbar_export_png_button_uses_save_dialog(
     figure.toolbar_buttons["export_png"].click()
 
     assert exported_paths == ["chart-export.png"]
+
+
+def test_figure_options_dialog_reads_and_returns_settings(
+    figure: BaseFigureWidget,
+) -> None:
+    figure.apply_settings(
+        {
+            "mode": "markers",
+            "marker_size": 8,
+            "line_width": 3,
+            "x_axis_title": "Time",
+            "y_axis_title": "Amplitude",
+        }
+    )
+    dialog = graph_module._FigureOptionsDialog(figure.current_settings(), figure)
+
+    assert dialog.mode_combo.currentData() == "markers"
+    assert dialog.marker_size_spin.value() == 8
+    assert dialog.line_width_spin.value() == 3
+    assert dialog.x_axis_title_edit.text() == "Time"
+    assert dialog.y_axis_title_edit.text() == "Amplitude"
+
+    dialog.mode_combo.setCurrentIndex(dialog.mode_combo.findData("lines+markers"))
+    dialog.marker_size_spin.setValue(12)
+    dialog.line_width_spin.setValue(5)
+    dialog.x_axis_title_edit.setText("Distance")
+    dialog.y_axis_title_edit.setText("Force")
+
+    assert dialog.settings() == {
+        "mode": "lines+markers",
+        "marker_size": 12,
+        "line_width": 5,
+        "x_axis_title": "Distance",
+        "y_axis_title": "Force",
+    }
+
+
+def test_hover_toolbar_plot_options_applies_accepted_dialog(
+    figure: BaseFigureWidget,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        graph_module._FigureOptionsDialog,
+        "exec",
+        lambda _dialog: QtWidgets.QDialog.DialogCode.Accepted,
+    )
+    monkeypatch.setattr(
+        graph_module._FigureOptionsDialog,
+        "settings",
+        lambda _dialog: {
+            "mode": "lines+markers",
+            "marker_size": 10,
+            "line_width": 4,
+            "x_axis_title": "Elapsed time",
+            "y_axis_title": "Temperature",
+        },
+    )
+
+    figure.toolbar_buttons["plot_options"].click()
+
+    assert figure.mode == "lines+markers"
+    assert figure.marker_size == 10
+    assert figure.line_width == 4
+    assert figure.x_axis_title == "Elapsed time"
+    assert figure.y_axis_title == "Temperature"
 
 
 def test_hover_toolbar_buttons_call_basic_features(figure: BaseFigureWidget) -> None:

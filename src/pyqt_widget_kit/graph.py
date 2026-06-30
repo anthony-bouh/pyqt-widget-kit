@@ -62,6 +62,75 @@ class FigureSettings(TypedDict, total=False):
 _ALLOWED_MODES: tuple[FigureMode, ...] = ("lines", "markers", "lines+markers")
 
 
+class _FigureOptionsDialog(QtWidgets.QDialog):
+    """Edit the figure options exposed by the hover toolbar."""
+
+    def __init__(
+        self,
+        settings: Mapping[str, object],
+        parent: Optional[QtWidgets.QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Plot options")
+        self.setModal(True)
+        self.setMinimumWidth(360)
+
+        self.mode_combo = QtWidgets.QComboBox(self)
+        self.mode_combo.addItem("Line", "lines")
+        self.mode_combo.addItem("Marker", "markers")
+        self.mode_combo.addItem("Line + marker", "lines+markers")
+        mode_index = self.mode_combo.findData(settings.get("mode", "lines"))
+        self.mode_combo.setCurrentIndex(max(0, mode_index))
+
+        self.marker_size_spin = QtWidgets.QSpinBox(self)
+        self.marker_size_spin.setRange(1, 100)
+        self.marker_size_spin.setValue(int(settings.get("marker_size", 6)))
+
+        self.line_width_spin = QtWidgets.QSpinBox(self)
+        self.line_width_spin.setRange(1, 100)
+        self.line_width_spin.setValue(int(settings.get("line_width", 1)))
+
+        self.x_axis_title_edit = QtWidgets.QLineEdit(
+            str(settings.get("x_axis_title", "")),
+            self,
+        )
+        self.x_axis_title_edit.setClearButtonEnabled(True)
+        self.y_axis_title_edit = QtWidgets.QLineEdit(
+            str(settings.get("y_axis_title", "")),
+            self,
+        )
+        self.y_axis_title_edit.setClearButtonEnabled(True)
+
+        form = QtWidgets.QFormLayout()
+        form.addRow("Plot option", self.mode_combo)
+        form.addRow("Marker size", self.marker_size_spin)
+        form.addRow("Line width", self.line_width_spin)
+        form.addRow("X-axis title", self.x_axis_title_edit)
+        form.addRow("Y-axis title", self.y_axis_title_edit)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.StandardButton.Ok
+            | QtWidgets.QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+    def settings(self) -> FigureSettings:
+        """Return the values currently entered in the dialog."""
+        return {
+            "mode": cast(FigureMode, self.mode_combo.currentData()),
+            "marker_size": self.marker_size_spin.value(),
+            "line_width": self.line_width_spin.value(),
+            "x_axis_title": self.x_axis_title_edit.text(),
+            "y_axis_title": self.y_axis_title_edit.text(),
+        }
+
+
 class BaseFigureWidget(QtWidgets.QWidget):
     """
     Common parent for pyqtgraph-driven widgets.
@@ -286,6 +355,7 @@ class BaseFigureWidget(QtWidgets.QWidget):
 
         actions = [
             ("auto_range", "Auto range", 'ico/full-screen.png', self._toolbar_auto_range, False),
+            ("plot_options", "Plot options", 'ico/settings.png', self._toolbar_show_plot_options, False),
             ("legend", "Toggle legend", 'ico/case.png', self._toolbar_toggle_legend, True),
             ("grid_x", "Toggle grid X", 'ico/grip-lines-vertical.png', self._toolbar_toggle_grid_x, True),
             ("grid_y", "Toggle grid Y", 'ico/grip-lines-horizontal.png', self._toolbar_toggle_grid_y, True),
@@ -362,6 +432,11 @@ class BaseFigureWidget(QtWidgets.QWidget):
 
     def _toolbar_auto_range(self) -> None:
         self.auto_range(padding=0.08)
+
+    def _toolbar_show_plot_options(self) -> None:
+        dialog = _FigureOptionsDialog(self.current_settings(), self)
+        if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+            self.apply_settings(dialog.settings())
 
     def _toolbar_toggle_legend(self) -> None:
         self.set_legend_visibility(not self.show_legend)

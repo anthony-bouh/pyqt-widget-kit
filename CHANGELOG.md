@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.0.2] - 2026-06-30
+
+### Added
+
+- Added a plot-options action to the `BaseFigureWidget` hover toolbar. Its
+  dialog configures line/marker display, marker size, line width, and x/y-axis
+  titles.
+
 ## [3.0.1] - 2026-06-30
 
 ### Added
@@ -62,7 +70,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - GitHub Actions test workflow now installs Qt runtime libraries required for
   PyQt6 imports on Ubuntu runners.
 
-[Unreleased]: https://github.com/anthony-bouh/pyqt-widget-kit/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/anthony-bouh/pyqt-widget-kit/compare/v3.0.2...HEAD
+[3.0.2]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v3.0.2
 [3.0.1]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v3.0.1
 [3.0.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v3.0.0
 [2.0.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v2.0.0

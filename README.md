@@ -23,7 +23,7 @@ python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git"
 From a specific GitHub release tag:
 
 ```bash
-python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git@v3.0.1"
+python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git@v3.0.2"
 ```
 
 Check the version currently installed in the active Python environment:
@@ -71,6 +71,23 @@ figure.add_points(
 figure.pointClicked.connect(print)
 figure.show()
 ```
+
+`BaseFigureWidget` provides a hover toolbar for common chart actions. The
+plot-options button opens a dialog for choosing line, marker, or combined
+display; changing marker size and line width; and editing both axis titles:
+
+```python
+from pyqt_widget_kit import BaseFigureWidget
+
+figure = BaseFigureWidget()
+figure.add_dataset([2.0, 3.5, 3.0], name="Measurements")
+figure.set_titles("", "Sample", "Value")
+figure.show()
+```
+
+Move the pointer over the chart and select the gear button to open the dialog.
+Accepted changes are applied to the figure immediately; cancelling leaves the
+current options unchanged.
 
 ## Stylesheets
 
@@ -123,8 +140,8 @@ To publish a release, update `pyproject.toml` and `CHANGELOG.md`, commit the
 changes, then push the matching version tag:
 
 ```bash
-git tag -a v3.0.1 -m "v3.0.1"
-git push origin main v3.0.1
+git tag -a v3.0.2 -m "v3.0.2"
+git push origin main v3.0.2
 ```
 
 The release workflow runs automatically for pushed `vX.Y.Z` tags. If the tag
