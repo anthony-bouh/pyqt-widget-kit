@@ -266,6 +266,7 @@ def test_hover_toolbar_exists_and_is_hidden_by_default(figure: BaseFigureWidget)
         "grid_y",
         "crosshair",
         "export_png",
+        "add_region",
         "clear_regions",
         "clear_curves",
     }
@@ -313,7 +314,6 @@ def test_hover_toolbar_export_png_button_uses_save_dialog(
 
 def test_hover_toolbar_buttons_call_basic_features(figure: BaseFigureWidget) -> None:
     figure.add_dataset([1, 2, 3], name="Curve")
-    figure.add_vertical_region(0.5, 1.5)
 
     figure.toolbar_buttons["legend"].click()
     assert figure.show_legend is False
@@ -328,6 +328,12 @@ def test_hover_toolbar_buttons_call_basic_features(figure: BaseFigureWidget) -> 
 
     figure.toolbar_buttons["crosshair"].click()
     assert figure.crosshair_enabled is True
+
+    figure.set_x_range(0.0, 2.0)
+    figure.toolbar_buttons["add_region"].click()
+    regions = [item for item in figure.plot.items() if isinstance(item, pg.LinearRegionItem)]
+    assert len(regions) == 1
+    np.testing.assert_allclose(regions[0].getRegion(), [0.8, 1.2])
 
     figure.toolbar_buttons["clear_regions"].click()
     assert not any(isinstance(item, pg.LinearRegionItem) for item in figure.plot.items())

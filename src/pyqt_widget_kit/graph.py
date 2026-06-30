@@ -291,6 +291,7 @@ class BaseFigureWidget(QtWidgets.QWidget):
             ("grid_y", "Toggle grid Y", 'ico/grip-lines-horizontal.png', self._toolbar_toggle_grid_y, True),
             ("crosshair", "Toggle crosshair", 'ico/square-crosshair.png', self._toolbar_toggle_crosshair, True),
             ("export_png", "Export PNG", 'ico/camera.png', self._toolbar_export_png, False),
+            ("add_region", "Add region", 'ico/square-dashed-circle-plus.png', self._toolbar_add_region, False),
             ("clear_regions", "Clear regions", 'ico/square-dashed-circle-minus.png', self.clear_regions, False),
             ("clear_curves", "Clear curves", 'ico/cross.png', self.clear_trace, False),
         ]
@@ -373,6 +374,18 @@ class BaseFigureWidget(QtWidgets.QWidget):
 
     def _toolbar_toggle_crosshair(self) -> None:
         self.enable_crosshair(not self.crosshair_enabled)
+
+    def _toolbar_add_region(self) -> None:
+        x_range = self.x_range()
+        if x_range is None:
+            return
+
+        minimum, maximum = x_range
+        span = maximum - minimum
+        self.add_vertical_region(
+            minimum + 0.4 * span,
+            minimum + 0.6 * span,
+        )
 
     def _toolbar_export_png(self) -> None:
         file_path, _selected_filter = QtWidgets.QFileDialog.getSaveFileName(
