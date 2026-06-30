@@ -7,6 +7,13 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [3.0.1] - 2026-06-30
+
+### Added
+
+- Added a `BaseFigureWidget` hover-toolbar action that creates a vertical
+  selection region centered within the current x-axis range.
+
 ## [3.0.0] - 2026-06-16
 
 ### Added
@@ -55,7 +62,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - GitHub Actions test workflow now installs Qt runtime libraries required for
   PyQt6 imports on Ubuntu runners.
 
-[Unreleased]: https://github.com/anthony-bouh/pyqt-widget-kit/compare/v3.0.0...HEAD
+[Unreleased]: https://github.com/anthony-bouh/pyqt-widget-kit/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v3.0.1
 [3.0.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v3.0.0
 [2.0.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v2.0.0
 [1.1.0]: https://github.com/anthony-bouh/pyqt-widget-kit/releases/tag/v1.1.0

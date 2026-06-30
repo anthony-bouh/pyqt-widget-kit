@@ -23,7 +23,7 @@ python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git"
 From a specific GitHub release tag:
 
 ```bash
-python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git@v3.0.0"
+python -m pip install "git+https://github.com/anthony-bouh/pyqt-widget-kit.git@v3.0.1"
 ```
 
 Check the version currently installed in the active Python environment:
@@ -123,8 +123,8 @@ To publish a release, update `pyproject.toml` and `CHANGELOG.md`, commit the
 changes, then push the matching version tag:
 
 ```bash
-git tag -a v3.0.0 -m "v3.0.0"
-git push origin main v3.0.0
+git tag -a v3.0.1 -m "v3.0.1"
+git push origin main v3.0.1
 ```
 
 The release workflow runs automatically for pushed `vX.Y.Z` tags. If the tag
